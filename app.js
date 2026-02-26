@@ -104,6 +104,52 @@
     return items;
   }
 
+  /** Returns array of { categoryId, categoryName, items } for master list when sort is category. Includes all categories (even empty) and Uncategorized. */
+  function getMasterGroupedByCategory() {
+    const groups = [];
+    const sortedCats = state.categories.slice().sort(function (a, b) {
+      return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+    });
+    sortedCats.forEach(function (cat) {
+      const items = state.master
+        .filter(function (m) { return m.categoryId === cat.id; })
+        .slice()
+        .sort(function (a, b) { return a.name.localeCompare(b.name, undefined, { sensitivity: "base" }); });
+      groups.push({ categoryId: cat.id, categoryName: cat.name, items: items });
+    });
+    const uncategorized = state.master
+      .filter(function (m) { return !m.categoryId; })
+      .slice()
+      .sort(function (a, b) { return a.name.localeCompare(b.name, undefined, { sensitivity: "base" }); });
+    groups.push({ categoryId: null, categoryName: "Uncategorized", items: uncategorized });
+    return groups;
+  }
+
+  /** Returns array of { categoryId, categoryName, items } for cart when sort is category. Only groups that have items. */
+  function getCartGroupedByCategory() {
+    const items = state.cart
+      .map(function (id) { return state.master.find(function (m) { return m.id === id; }); })
+      .filter(Boolean);
+    const byCat = Object.create(null);
+    items.forEach(function (item) {
+      const id = item.categoryId != null ? item.categoryId : "__uncategorized";
+      if (!byCat[id]) byCat[id] = { categoryId: item.categoryId, categoryName: getCategoryName(item.categoryId) || "Uncategorized", items: [] };
+      byCat[id].items.push(item);
+    });
+    Object.keys(byCat).forEach(function (k) {
+      byCat[k].items.sort(function (a, b) { return a.name.localeCompare(b.name, undefined, { sensitivity: "base" }); });
+    });
+    const sortedCats = state.categories.slice().sort(function (a, b) {
+      return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+    });
+    const groups = [];
+    sortedCats.forEach(function (cat) {
+      if (byCat[cat.id]) groups.push(byCat[cat.id]);
+    });
+    if (byCat["__uncategorized"]) groups.push(byCat["__uncategorized"]);
+    return groups;
+  }
+
   function updateCounts() {
     const masterEl = document.getElementById("count-master");
     const catEl = document.getElementById("count-categories");
@@ -117,6 +163,51 @@
     const ul = document.getElementById("list-master");
     if (!ul) return;
     ul.innerHTML = "";
+
+    if (state.masterSort === "category") {
+      const groups = getMasterGroupedByCategory();
+      if (state.master.length === 0) {
+        const li = document.createElement("li");
+        li.className = "empty-state";
+        li.innerHTML = "<p>No items yet. Add one above.</p>";
+        ul.appendChild(li);
+        return;
+      }
+      groups.forEach(function (group) {
+        const header = document.createElement("li");
+        header.className = "list-section-header";
+        header.setAttribute("role", "heading");
+        header.setAttribute("aria-level", "2");
+        const addLabel = "Add item to " + escapeHtml(group.categoryName);
+        header.innerHTML =
+          '<span class="list-section-header-title">' + escapeHtml(group.categoryName) + '</span>' +
+          '<button type="button" class="btn-icon btn-add-in-section" aria-label="' + addLabel + '" title="' + addLabel + '">' +
+            '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>' +
+          '</button>';
+        ul.appendChild(header);
+        const addBtn = header.querySelector(".btn-add-in-section");
+        if (addBtn) addBtn.addEventListener("click", function () { openAddItem(group.categoryId); });
+        group.items.forEach(function (item) {
+          const li = document.createElement("li");
+          li.className = "list-item";
+          li.dataset.id = item.id;
+          const catName = getCategoryName(item.categoryId);
+          li.innerHTML =
+            '<div class="list-item-content">' +
+              '<div class="list-item-name">' + escapeHtml(item.name) + '</div>' +
+              (catName ? '<div class="list-item-category">' + escapeHtml(catName) + '</div>' : '') +
+            '</div>' +
+            '<div class="list-item-actions">' +
+              '<button type="button" class="btn-icon btn-edit" aria-label="Edit">' + iconEdit() + '</button>' +
+              '<button type="button" class="btn-icon btn-delete" aria-label="Delete">' + iconDelete() + '</button>' +
+            '</div>';
+          ul.appendChild(li);
+          bindMasterItem(li, item);
+        });
+      });
+      return;
+    }
+
     const list = getMasterSorted();
     if (list.length === 0) {
       const li = document.createElement("li");
@@ -207,6 +298,45 @@
     const ul = document.getElementById("list-shopping");
     if (!ul) return;
     ul.innerHTML = "";
+
+    if (state.shoppingSort === "category") {
+      const groups = getCartGroupedByCategory();
+      if (groups.length === 0 || state.cart.length === 0) {
+        const li = document.createElement("li");
+        li.className = "empty-state";
+        li.innerHTML = "<p>Swipe right on a Master List item to add it here, or use the add control.</p>";
+        ul.appendChild(li);
+        return;
+      }
+      groups.forEach(function (group) {
+        const header = document.createElement("li");
+        header.className = "list-section-header";
+        header.setAttribute("role", "heading");
+        header.setAttribute("aria-level", "2");
+        header.innerHTML = '<span class="list-section-header-title">' + escapeHtml(group.categoryName) + '</span>';
+        ul.appendChild(header);
+        group.items.forEach(function (item) {
+          const li = document.createElement("li");
+          li.className = "list-item";
+          li.dataset.id = item.id;
+          const catName = getCategoryName(item.categoryId);
+          li.innerHTML =
+            '<div class="list-item-content">' +
+              '<div class="list-item-name">' + escapeHtml(item.name) + '</div>' +
+              (catName ? '<div class="list-item-category">' + escapeHtml(catName) + '</div>' : '') +
+            '</div>' +
+            '<div class="list-item-actions">' +
+              '<button type="button" class="btn-icon btn-delete" aria-label="Remove from list">' + iconDelete() + '</button>' +
+            '</div>';
+          ul.appendChild(li);
+          const deleteBtn = li.querySelector(".btn-delete");
+          if (deleteBtn) deleteBtn.addEventListener("click", function () { removeFromCart(item.id); });
+          setupSwipe(li, { right: null, left: function () { removeFromCart(item.id); } });
+        });
+      });
+      return;
+    }
+
     const list = getCartItemsSorted();
     if (list.length === 0) {
       const li = document.createElement("li");
@@ -330,11 +460,13 @@
     sel.value = current || "";
   }
 
-  function openAddItem() {
+  function openAddItem(categoryId) {
     document.getElementById("modal-item-title").textContent = "Add item";
     document.getElementById("form-item").reset();
     document.getElementById("item-id").value = "";
     refreshCategorySelect();
+    const categorySelect = document.getElementById("item-category");
+    if (categoryId && categorySelect) categorySelect.value = categoryId;
     document.getElementById("modal-item").showModal();
     setTimeout(function () { document.getElementById("item-name").focus(); }, 50);
   }
@@ -501,8 +633,15 @@
     setupTheme();
     setupModals();
 
-    document.getElementById("add-master-item").addEventListener("click", openAddItem);
+    document.getElementById("add-master-item").addEventListener("click", function () { openAddItem(); });
     document.getElementById("add-category").addEventListener("click", openAddCategory);
+
+    document.querySelectorAll("#panel-master .sort-btn").forEach(function (b) {
+      b.classList.toggle("active", b.dataset.sort === state.masterSort);
+    });
+    document.querySelectorAll('.sort-btn[data-list="shopping"]').forEach(function (b) {
+      b.classList.toggle("active", b.dataset.sort === state.shoppingSort);
+    });
   }
 
   if (document.readyState === "loading") {
