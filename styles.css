@@ -153,8 +153,33 @@ body {
   font-weight: 600;
 }
 
+.tab-icon-wrap {
+  position: relative;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .tab-icon {
   flex-shrink: 0;
+}
+
+.tab-count-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  padding: 0 0.35rem;
+  margin-left: 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--accent);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
 }
 
 .tab-label {
@@ -162,6 +187,7 @@ body {
 }
 
 @media (min-width: 600px) {
+  .tab-count-badge { display: none; }
   .tab-label { display: inline; }
 }
 
